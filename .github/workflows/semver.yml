@@ -1,64 +1,172 @@
-name: Semver Github Release
-
 on:
   push:
-    branches: [ main ]
+    tags:
+      - v*
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{steps.semrel.outputs.version}}
-    steps:
-      - uses: actions/checkout@v2
-      - uses: go-semantic-release/action@v1
-        id: semrel
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          changelog-generator-opt: "emojis=true"
-          allow-initial-development-versions: true
-  releases-matrix:
-    name: Release Go Binary
-    runs-on: ubuntu-latest
-    needs: release
-    if: needs.release.outputs.version != ''
+  package:
     strategy:
       matrix:
-        # build and publish in parallel: linux/amd64, windows/amd64, darwin/amd64
-        goos: [ linux, windows, darwin ]
-        goarch: [amd64, arm64]
-        exclude:
-          - goarch: arm64
-            goos: windows
-          - goarch: arm64
-            goos: linux
+        go-version: [1.17.x]
+
+        platform: [macos-10.15, ubuntu-20.04, windows-2019]
+    runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/setup-node@v2
-        with:
-          node-version: '16'
-      - name: Set up Go 1.x
+      - name: Get version tag (unix)
+        if: matrix.platform != 'windows-2019'
+        id: version
+        run: echo "::set-output name=tag::${GITHUB_REF/refs\/tags\//}"
+
+      - name: Get version tag (windows)
+        if: matrix.platform == 'windows-2019'
+        id: versionw
+        run: |
+          $tag = $env:GITHUB_REF -replace "refs/tags/", ""
+          echo "::set-output name=tag::$(echo $tag)"
+      - name: Install Go
         uses: actions/setup-go@v2
         with:
-          go-version: ^1.16
-        id: go
+          go-version: ${{ matrix.go-version }}
+
+      - name: Chechout
+        uses: actions/checkout@v2
+
       - name: Install Wails
-        run: go install github.com/wailsapp/wails/cmd/wails@latest
-      - uses: actions/checkout@v2
-      - run: |
-          wails build
-          mv ./build/waterfall ./build/waterfall-${{matrix.goos}}-${{matrix.goarch}}
-      - uses: softprops/action-gh-release@v1
+        run: go get github.com/wailsapp/wails/cmd/wails@v1.16.8
+
+      # darwin
+      - name: Build for darwin
+        if: matrix.platform == 'macos-10.15'
+        run: |
+          mkdir -p ~/.wails
+          cp wails.json ~/.wails/
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.version.outputs.tag }}" info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.tag }}" info.plist
+          wails build -f -p -ldflags "-X test/internal/app.semver=${{ steps.version.outputs.tag }}"
+      - name: Create darwin disk image
+        if: matrix.platform == 'macos-10.15'
+        run: |
+          brew install create-dmg
+          rm build/test
+          create-dmg --volname "Test" --volicon "assets/darwin/dmg_icon.icns" --background "assets/darwin/dmg_bg.png" --window-size 512 360 --icon-size 100 --icon "Test.app" 100 185  --hide-extension "Test.app" --app-drop-link 388 185 "Test_${{ steps.version.outputs.tag }}_Darwin_x86_64.dmg" "build"
+      - name: Upload darwin disk image
+        if: matrix.platform == 'macos-10.15'
+        uses: actions/upload-artifact@v2
         with:
-          files: build/*
-#      - uses: wangyoucao577/go-release-action@v1.21
-#        with:
-#          github_token: ${{ secrets.GITHUB_TOKEN }}
-#          goos: ${{ matrix.goos }}
-#          goarch: ${{ matrix.goarch }}
-#          goversion: "https://dl.google.com/go/go1.17.3.linux-amd64.tar.gz"
-#          pre_command: "make ci"
-#          build_command: "make build"
-#          release_tag: ${{needs.release.outputs.version}}
-#          overwrite: true
-##          asset_name: "test-${{ needs.release.output.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
-#          retry: 60
+          name: Test_${{ steps.version.outputs.tag }}_Darwin_x86_64.dmg
+          path: Test_${{ steps.version.outputs.tag }}_Darwin_x86_64.dmg
+
+      # linux
+      - name: Build for linux
+        if: matrix.platform == 'ubuntu-16.04'
+        run: |
+          sudo apt update && sudo apt install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+          mkdir -p ~/.wails
+          cp wails.json ~/.wails/
+          wails build -f -ldflags "-X test/internal/app.semver=${{ steps.version.outputs.tag }}"
+          tar -C build -zcvf Test_${{ steps.version.outputs.tag }}_Linux_x86_64.tar.gz test
+      - name: Upload linux tar.gz
+        if: matrix.platform == 'ubuntu-16.04'
+        uses: actions/upload-artifact@v2
+        with:
+          name: Test_${{ steps.version.outputs.tag }}_Linux_x86_64.tar.gz
+          path: Test_${{ steps.version.outputs.tag }}_Linux_x86_64.tar.gz
+
+      # - name: Create linux app image
+      #   if: matrix.platform == 'ubuntu-16.04'
+      #   run: |
+      #     wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+      #     chmod +x linuxdeploy-x86_64.AppImage
+      #     mogrify -resize 512x512 appicon.png
+      #     ./linuxdeploy*.AppImage --appdir AppDir --executable build/test --desktop-file AppImage.desktop --icon-file appicon.png --output appimage
+      #     mv Test*.AppImage Test_${{ steps.version.outputs.tag }}_Linux_x86_64.AppImage
+
+      # - name: Upload linux app image
+      #   if: matrix.platform == 'ubuntu-16.04'
+      #   uses: actions/upload-artifact@v2
+      #   with:
+      #     name: Test_${{ steps.version.outputs.tag }}_Linux_x86_64.AppImage
+      #     path: Test_${{ steps.version.outputs.tag }}_Linux_x86_64.AppImage
+
+      # windows
+      - name: Build for windows
+        if: matrix.platform == 'windows-2019'
+        run: |
+          New-Item -ItemType directory -Path "$HOME\.wails" -Force
+          Copy-Item -Path "$PWD\wails.json" -Destination "$HOME\.wails\wails.json"
+          choco install mingw
+          wails build -f -p -ldflags "-X test/internal/app.semver=${{ steps.versionw.outputs.tag }}"
+          Compress-Archive -Path "$PWD\build\test.exe" -DestinationPath "$PWD\Test_${{ steps.versionw.outputs.tag }}_Windows_x86_64.zip"
+      - name: Upload windows zip
+        if: matrix.platform == 'windows-2019'
+        uses: actions/upload-artifact@v2
+        with:
+          name: Test_${{ steps.versionw.outputs.tag }}_Windows_x86_64.zip
+          path: Test_${{ steps.versionw.outputs.tag }}_Windows_x86_64.zip
+
+  release:
+    runs-on: ubuntu-latest
+    needs: package
+    steps:
+      - name: Get version tag
+        id: version
+        run: echo "::set-output name=tag::${GITHUB_REF/refs\/tags\//}"
+
+      - name: Get changelog url
+        id: changelog
+        run: echo "${{ steps.version.outputs.tag }}---$(date +'%Y-%m-%d')" | sed -e 's/\.//g' | awk '{print "::set-output name=url::https://github.com/rogchap/test/blob/master/CHANGELOG.md#" $1}'
+
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          release_name: ${{ steps.version.outputs.tag }}
+          body: Full changelog ⇒ [${{ steps.version.outputs.tag }}](${{ steps.changelog.outputs.url }})
+          draft: true
+          prerelease: false
+
+      - name: Download all release packages
+        uses: actions/download-artifact@v2
+
+      - name: Attach darwin disk image
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: Test_${{ steps.version.outputs.tag }}_Darwin_x86_64.dmg/Test_${{ steps.version.outputs.tag }}_Darwin_x86_64.dmg
+          asset_name: Test_${{ steps.version.outputs.tag }}_Darwin_x86_64.dmg
+          asset_content_type: application/octet-stream
+
+      - name: Attach linux tar.gz
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: Test_${{ steps.version.outputs.tag }}_Linux_x86_64.tar.gz/Test_${{ steps.version.outputs.tag }}_Linux_x86_64.tar.gz
+          asset_name: Test_${{ steps.version.outputs.tag }}_Linux_x86_64.tar.gz
+          asset_content_type: application/octet-stream
+
+      # - name: Attach linux app image
+      #   uses: actions/upload-release-asset@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     upload_url: ${{ steps.create_release.outputs.upload_url }}
+      #     asset_path: Test_${{ steps.version.outputs.tag }}_Linux_x86_64.AppImage/Test_${{ steps.version.outputs.tag }}_Linux_x86_64.AppImage
+      #     asset_name: Test_${{ steps.version.outputs.tag }}_Linux_x86_64.AppImage
+      #     asset_content_type: application/octet-stream
+
+      - name: Attach windows zip
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: Test_${{ steps.version.outputs.tag }}_Windows_x86_64.zip/Test_${{ steps.version.outputs.tag }}_Windows_x86_64.zip
+          asset_name: Test_${{ steps.version.outputs.tag }}_Windows_x86_64.zip
+          asset_content_type: application/octet-stream
