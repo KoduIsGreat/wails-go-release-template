@@ -21,7 +21,7 @@ jobs:
     name: Release Go Binary
     runs-on: ubuntu-latest
     needs: release
-    if: needs.release.outputs.version != ""
+    if: needs.release.outputs.version != ''
     strategy:
       matrix:
         # build and publish in parallel: linux/amd64, windows/amd64, darwin/amd64
