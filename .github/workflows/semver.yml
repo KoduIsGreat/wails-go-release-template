@@ -45,8 +45,8 @@ jobs:
         run: go install github.com/wailsapp/wails/cmd/wails@latest
       - uses: actions/checkout@v2
       - run: |
-        wails build
-        mv ./build/waterfall ./build/waterfall-${{matrix.goos}}-${{matrix.goarch}}
+          wails build
+          mv ./build/waterfall ./build/waterfall-${{matrix.goos}}-${{matrix.goarch}}
       - uses: softprops/action-gh-release@v1
         with:
           files: build/*
