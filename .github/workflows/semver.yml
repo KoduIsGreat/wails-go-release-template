@@ -41,7 +41,7 @@ jobs:
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
           goversion: "https://dl.google.com/go/go1.17.3.linux-amd64.tar.gz"
-          pre_command: "go install github.com/wailsapp/wails/cmd/wails@latest"
+          pre_command: "make ci"
           build_command: "make package"
           release_tag: ${{needs.release.outputs.version}}
           overwrite: true
