@@ -32,6 +32,9 @@ jobs:
             goos: windows
     steps:
       - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '16'
       - uses: wangyoucao577/go-release-action@v1.21
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -40,8 +43,7 @@ jobs:
           goversion: "https://dl.google.com/go/go1.17.3.linux-amd64.tar.gz"
           pre_command: "go install github.com/wailsapp/wails/cmd/wails@latest"
           build_command: "wails build"
-          release_tag: ${{steps.previoustag.outputs.tag}}
+          release_tag: ${{needs.release.outputs.version}}
           overwrite: true
-          binary_name: "test"
-          asset_name: "test-${{ needs.release.output.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+#          asset_name: "test-${{ needs.release.output.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
           retry: 60
