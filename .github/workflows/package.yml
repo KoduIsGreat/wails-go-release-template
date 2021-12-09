@@ -24,29 +24,20 @@ jobs:
     needs: [semver]
     if: needs.semver.outputs.version != ''
     steps:
-#      - name: Get version tag (unix)
-#        if: matrix.platform != 'windows-2019'
-#        id: version
-#        run: echo "::set-output name=tag::${GITHUB_REF/refs\/tags\//}"
-#
-#      - name: Get version tag (windows)
-#        if: matrix.platform == 'windows-2019'
-#        id: versionw
-#        run: |
-#          $tag = $env:GITHUB_REF -replace "refs/tags/", ""
-#          echo "::set-output name=tag::$(echo $tag)"
       - name: Install Go
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go-version }}
-
-      - name: Chechout
+      - name: Install Node
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+      - name: Checkout
         uses: actions/checkout@v2
 
       - name: Install Wails
         run: go install github.com/wailsapp/wails/cmd/wails@v1.16.8
 
-      # darwin
       - name: Build for darwin
         if: matrix.platform == 'macos-10.15'
         run: |
@@ -133,7 +124,6 @@ jobs:
         uses: actions/download-artifact@v2
       - name: Upload
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
             Test_${{ needs.semver.outputs.version }}_Windows_x86_64.zip/Test_${{ needs.semver.outputs.version }}_Windows_x86_64.zip
