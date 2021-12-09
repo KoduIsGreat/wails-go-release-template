@@ -125,7 +125,7 @@ jobs:
       - name: Upload
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ needs.semver.outputs.version }}
+          tag_name: v${{ needs.semver.outputs.version }}
           files: |
             Test_${{ needs.semver.outputs.version }}_Windows_x86_64.zip/Test_${{ needs.semver.outputs.version }}_Windows_x86_64.zip
             Test_${{ needs.semver.outputs.version }}_Darwin_x86_64.dmg/Test_${{ needs.semver.outputs.version }}_Darwin_x86_64.dmg
