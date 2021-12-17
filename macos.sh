@@ -1,13 +1,13 @@
 #!/bin/sh
-test -f Test.dmg && rm Test.dmg
-rm build/test
+test -f WaterFALL.dmg && rm WaterFALL.dmg
+rm build/waterfall
 create-dmg \
-  --volname "Test" \
+  --volname "WaterFALL" \
   --window-pos 200 120 \
   --window-size 800 400 \
   --icon-size 100 \
-  --icon "Test.app" 200 190 \
-  --hide-extension "Test.app" \
+  --icon "WaterFALL.app" 200 190 \
+  --hide-extension "WaterFALL.app" \
   --app-drop-link 600 185 \
-  "Test_Darwin_x86_64.dmg" \
+  "WaterFALL_Darwin_x86_64.dmg" \
   "build/"
