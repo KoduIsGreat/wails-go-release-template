@@ -19,7 +19,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           changelog-generator-opt: "emojis=true"
           allow-initial-development-versions: true
-#          prerelease: ${{ steps.myref.outputs.branch == 'develop'}}
+          prerelease: ${{ steps.myref.outputs.branch == 'develop'}}
   package:
     strategy:
       matrix:
